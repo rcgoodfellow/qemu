@@ -1,0 +1,105 @@
+IPMI over LAN
+=============
+~ Ryan Goodfellow <ry@goodwu.net>
+
+Overview
+--------
+
+This document describes the implementation of IPMI over LAN in QEMU. The IPMI
+over LAN functionality allows a QEMU virtual machine to be controlled using the
+IPMI protocol through its network interface. It does this by looking at packet
+headers that come through the network interface to see if they identify as IPMI
+protocol messages. If so, the packets are forwarded to the BMC, if not they
+continue on their normal path. IPMI over LAN support builds on existing IPMI
+functionality in QEMU. In particular, IPMI packets destined for the BMC are
+forwarded to the ipmi-bmc-sim device.
+
+The general structure of a system that supports IPMI over LAN looks like the
+following
+
+   +==========+        +============+
+   | Ethernet |        |    LAN     |   SMBus   +=====+
+   |   PHY    |--------| Controller |-----------| BMC |
+   +==========+        +============+           +=====+
+
+The IPMI over LAN functionality is currently implemented for the following
+network devices.
+  - e1000
+
+Usage
+-----
+
+Here is a simple example of enabling the support on an e1000 device in user mode
+networking. Support is not limited to user type netdevs, the ipmi option should
+work in any situation in which a supported network device is being used.
+
+qemu-system-x86_64 -netdev user,id=net0 -device e1000,netdev=net0,ipmi
+
+
+Protocol
+--------
+
+RCMP message
+
+      | . 3 . . . . . . . . . 2 . . . . . . . . . 1 . . . . . . . . . 0 |
+      | 1 0 9 8 7 6 5 4 3 2 1 0 9 8 7 6 5 4 3 2 1 0 9 8 7 6 5 4 3 2 1 0 |
+      |=================================================================|
+    ~ :                            preamble                             | Ethernet
+      |-----------------------------------------------------------------|
+    ~ | start of frame |                                                :
+      |-----------------------------------------------------------------|
+    4 :                        destination mac                          |
+      |-----------------------------------------------------------------|
+    8 :         source mac             |                                :
+      |-----------------------------------------------------------------|
+   12 |                                                                 :
+      |-----------------------------------------------------------------|
+   16 |                          802.1Q tag                             |
+   ~~ |-----------------------------------------------------------------|
+   18 | > > > > > > > > > > > > > > > >|         Ethertype              |
+      |+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++|
+   22 |       Total Length             |ECN|   DSCP    |  IHL  | version| IP
+      |-----------------------------------------------------------------|
+   26 |       fragment offset    |flags|          identification        |
+      |-----------------------------------------------------------------|
+   30 |     ip checksum                |  protocol     |   TTL          |
+      |-----------------------------------------------------------------|
+   34 |                       source address                            |
+      |-----------------------------------------------------------------|
+   38 |                     destination address                         |
+      |-----------------------------------------------------------------|
+      :                                                                 |
+      :                             options                             :
+      :                                                                 :
+      |                                                                 :
+      |+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++|
+      |     destination port           |          source port           | UDP
+      |-----------------------------------------------------------------|
+      |     checksum                   |          length                |
+      |+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++|
+      |    class      |   sequence     |   reserved  |     version      | RCMP
+      |-----------------------------------------------------------------|
+      :                                                                 |
+      :                             data                                :
+      :                                                                 :
+      :~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~:
+
+Data is variable length. The class byte is further broken down into the
+following bits
+
+RCMP ACK [7:1]
+  0 - normal message
+  1 - ACK message
+Reserved [6:2]
+Class    [4:4]
+  0-5  - reserved
+  6    - ASF
+  7    - IPMI
+  8    - OEM
+  9-16 - reserved
+
+The implemntation supports the following class:message combinations
+
+RCMP:ACK
+ASF:Ping
+ASF:Pong

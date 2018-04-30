@@ -23,9 +23,11 @@
 */
 
 #include "qemu/osdep.h"
+#include "qemu/log.h"
 #include "hw/hw.h"
 #include "hw/pci/pci.h"
 #include "net/net.h"
+#include "net/eth.h"
 
 #include "e1000x_common.h"
 
@@ -53,6 +55,64 @@ bool e1000x_is_vlan_packet(const uint8_t *buf, uint16_t vet)
     trace_e1000x_vlan_is_vlan_pkt(res, eth_proto, vet);
 
     return res;
+}
+
+bool e1000x_is_ipmi_packet(const uint8_t *buf)
+{
+  qemu_log("ipmi: testing ipmi\n");
+  /* determine ethernet header size */
+  size_t eth_sz = sizeof(struct eth_header);
+  uint16_t tpid = lduw_be_p(buf+12);
+  if(tpid == 0x8100 || tpid ==  0x88a8) {
+    eth_sz += sizeof(struct vlan_header);
+    qemu_log("vlan header\n");
+  }
+  qemu_log("eth_sz: %zu\n", eth_sz);
+
+  /* read the ip protocol, if not UDP - not an ipmi packet */
+  uint8_t proto = ldub_p(buf + eth_sz + 9);
+  if(proto != IP_PROTO_UDP) {
+    qemu_log("ipmi: not udp\n");
+    return false;
+  }
+
+  /* read the internet header length */
+  uint8_t ihl = ldub_p(buf + eth_sz);
+  qemu_log("ihl_: %u\n", ihl);
+  ihl &= 0xfU;
+  qemu_log("ihl: %u\n", ihl);
+  size_t ip_sz = ihl*4;
+
+  /* read the UDP destination port, if not 623 - not an ipmi packet 
+   * TODO: also deal with 624
+   * */
+  uint16_t dstp = lduw_be_p(buf + eth_sz + ip_sz + 2);
+  if(dstp != 623) {
+    qemu_log("ipmi: port %u != 623\n", dstp);
+    return false;
+  }
+
+  /* read RMCP header */
+  size_t rcmp_start = eth_sz + ip_sz + sizeof(udp_header);
+  uint8_t version = ldub_p(buf + rcmp_start),
+          sequence = ldub_p(buf + rcmp_start + 2),
+          class = ldub_p(buf + rcmp_start + 3);
+
+  if(version  == IPMI_RCMP_VERSION && 
+     sequence == IPMI_RCMP_SEQUENCE &&
+     class    == IPMI_RCMP_CLASS ) {
+    return true;
+  }
+  else {
+    //XXX remove this, if we get a malformed ipmi packet don't fret just forward
+    qemu_log("?: packet targets IPMI port, but is not IPMI\n");
+    qemu_log("version %x\n", version);
+    qemu_log("sequence %x\n", sequence);
+    qemu_log("class %x\n", class);
+  }
+
+
+  return false;
 }
 
 bool e1000x_rx_group_filter(uint32_t *mac, const uint8_t *buf)

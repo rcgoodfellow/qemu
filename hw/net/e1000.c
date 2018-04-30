@@ -26,6 +26,7 @@
 
 
 #include "qemu/osdep.h"
+#include "qemu/log.h"
 #include "hw/hw.h"
 #include "hw/pci/pci.h"
 #include "net/net.h"
@@ -772,6 +773,10 @@ receive_filter(E1000State *s, const uint8_t *buf, int size)
                                  ((vid >> 5) & 0x7f));
         if ((vfta & (1 << (vid & 0x1f))) == 0)
             return 0;
+    }
+
+    if (unlikely(e1000x_is_ipmi_packet(buf))) {
+      qemu_log("GOT IPMI PACKET!\n");
     }
 
     if (!isbcast && !ismcast && (rctl & E1000_RCTL_UPE)) { /* promiscuous ucast */
