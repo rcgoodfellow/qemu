@@ -228,6 +228,7 @@ struct tcp_hdr {
 #define IPMI_RCMP_VERSION         0x06
 #define IPMI_RCMP_SEQUENCE        0xFF
 #define IPMI_RCMP_CLASS           0x07
+#define ASF_RCMP_CLASS            0x06
 
 #define IS_SPECIAL_VLAN_ID(x)     \
     (((x) == 0) || ((x) == 0xFFF))

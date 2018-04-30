@@ -776,7 +776,7 @@ receive_filter(E1000State *s, const uint8_t *buf, int size)
     }
 
     if (unlikely(e1000x_is_ipmi_packet(buf))) {
-      qemu_log("GOT IPMI PACKET!\n");
+      //TODO send to bmc-sim
     }
 
     if (!isbcast && !ismcast && (rctl & E1000_RCTL_UPE)) { /* promiscuous ucast */

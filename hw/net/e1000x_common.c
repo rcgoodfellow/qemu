@@ -94,14 +94,37 @@ bool e1000x_is_ipmi_packet(const uint8_t *buf)
 
   /* read RMCP header */
   size_t rcmp_start = eth_sz + ip_sz + sizeof(udp_header);
-  uint8_t version = ldub_p(buf + rcmp_start),
+  uint8_t version =  ldub_p(buf + rcmp_start),
           sequence = ldub_p(buf + rcmp_start + 2),
-          class = ldub_p(buf + rcmp_start + 3);
+          class =    ldub_p(buf + rcmp_start + 3);
 
   if(version  == IPMI_RCMP_VERSION && 
      sequence == IPMI_RCMP_SEQUENCE &&
-     class    == IPMI_RCMP_CLASS ) {
+     class    == IPMI_RCMP_CLASS 
+  ) {
+    qemu_log("GOT IPMI PACKET!\n");
+    size_t ipmi_start = rcmp_start + 4;
+    uint8_t  auth_fmt_type =  ldub_p(   buf + ipmi_start);
+    if(auth_fmt_type) {
+      qemu_log("ipmi: only AUTH=NONE supported at this time\n");
+      return false;
+    }
+    uint32_t session_id =     ldl_be_p( buf + ipmi_start + 1),
+             seq =            ldl_be_p( buf + ipmi_start + 5);
+    uint8_t  plen =           ldub_p(   buf + ipmi_start + 9);
+
+    qemu_log("ipmi_auth_fmt: %u\n", auth_fmt_type);
+    qemu_log("ipmi_session: %u\n", session_id);
+    qemu_log("ipmi_seq: %u\n", seq);
+    qemu_log("ipmi_len: %u\n", plen);
     return true;
+  }
+  else if(version == IPMI_RCMP_VERSION &&
+          sequence < IPMI_RCMP_SEQUENCE &&
+          class == ASF_RCMP_CLASS
+  ) {
+    qemu_log("GOT ASF PACKET!\n");
+    return false;
   }
   else {
     //XXX remove this, if we get a malformed ipmi packet don't fret just forward
