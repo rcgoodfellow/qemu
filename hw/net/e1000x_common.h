@@ -177,7 +177,7 @@ bool e1000x_rx_ready(PCIDevice *d, uint32_t *mac);
 
 bool e1000x_is_vlan_packet(const uint8_t *buf, uint16_t vet);
 
-bool e1000x_is_ipmi_packet(const uint8_t *buf);
+void e1000x_check_ipmi_packet(const uint8_t *buf);
 
 bool e1000x_rx_group_filter(uint32_t *mac, const uint8_t *buf);
 
