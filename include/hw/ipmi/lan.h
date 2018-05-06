@@ -1,5 +1,7 @@
 #pragma once
 #include "qemu/osdep.h"
+#include "net/eth.h"
+#include "net/net.h"
 
 #define IPMI_UDP_PORT 623
 #define PACKED __attribute__ ((__packed__))
@@ -40,6 +42,14 @@ struct ipmi_15_pkt {
   struct ipmi_15_hdr     header;
   uint8_t                *payload;
   struct ipmi_15_footer  footer;
+} PACKED;
+
+struct ipmi_15_full_pkt {
+  struct eth_header   eth;
+  struct ip_header    ip;
+  struct udp_header   udp;
+  struct rcmp_hdr     rcmp;
+  struct ipmi_15_pkt  ipmi;
 } PACKED;
 
 #define IPMI_15_PKT()    \
@@ -158,7 +168,11 @@ struct ipmi_get_auth_response {
   uint8_t                                 checksum;
 } PACKED;
 
-void check_ipmi_packet(const uint8_t *buf);
+struct ipmi_15_full_pkt *check_ipmi_packet(const uint8_t *buf);
+void ipmi_15_free_full_pkt(struct ipmi_15_full_pkt *);
+static inline int ipmi_15_fp_len(const struct ipmi_15_full_pkt *pkt) {
+  return pkt->ip.ip_len + sizeof(struct eth_header);
+}
 
 /*
  *  chassis

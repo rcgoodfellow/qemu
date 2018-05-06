@@ -59,6 +59,12 @@ static void ipmi_free_pkt(struct ipmi_15_pkt *pkt)
   free(pkt->payload);
 }
 
+void ipmi_15_free_full_pkt(struct ipmi_15_full_pkt *pkt)
+{
+  ipmi_free_pkt(&pkt->ipmi);
+  free(pkt);
+}
+
 static inline uint8_t checksum(const uint8_t *data, size_t size) 
 {
   uint8_t ck = 0;
@@ -201,8 +207,8 @@ handle_ipmi_request(const uint8_t *pkt_in, struct ipmi_15_pkt *pkt_out)
 }
 
 /*
- * TODO XXX - These are in net/checksum - but not exported for all machine
- *            types
+ * TODO XXX - These are in net/checksum & net/eth - but not exported for all 
+ *            machine types
  */
 
 static inline uint32_t 
@@ -252,11 +258,28 @@ checksum_tcpudp(uint16_t length, uint16_t proto,
   return checksum_finish(sum);
 }
 
+static inline uint32_t
+calc_ip4_pseudo_hdr_csum(struct ip_header *iphdr,
+                             uint16_t csl,
+                             uint32_t *cso)
+{
+    struct ip_pseudo_header ipph;
+    ipph.ip_src = iphdr->ip_src;
+    ipph.ip_dst = iphdr->ip_dst;
+    ipph.ip_payload = cpu_to_be16(csl);
+    ipph.ip_proto = iphdr->ip_p;
+    ipph.zeros = 0;
+    *cso = sizeof(ipph);
+    return checksum_add(*cso, (uint8_t *) &ipph);
+}
+
 /* end XXX */
 
-static void send_ipmi_response(
+static struct ipmi_15_full_pkt*
+create_ipmi_response(
     const struct eth_header *eth_origin,
     const struct ip_header *ip_origin,
+    const struct rcmp_hdr *rcmp,
     const struct ipmi_15_pkt *ipkt)
 {
   struct eth_header eth;
@@ -280,28 +303,36 @@ static void send_ipmi_response(
   ip.ip_src = ip_origin->ip_dst;
   ip.ip_dst = ip_origin->ip_src;
 
-  //TODO compute ip checksum
+  uint32_t cso;
+  ip.ip_sum = calc_ip4_pseudo_hdr_csum(&ip, ip.ip_len, &cso);
   
   struct udp_header udp; 
   udp.uh_sport = IPMI_UDP_PORT;
   udp.uh_dport = IPMI_UDP_PORT;
   udp.uh_ulen = ip.ip_len - sizeof(struct ip_header);
-  
+
+  struct ipmi_15_full_pkt *out = malloc(sizeof(struct ipmi_15_full_pkt));
+  out->eth = eth,
+  out->ip = ip,
+  out->udp = udp,
+  out->rcmp = *rcmp,
+  out->ipmi = *ipkt,
+
   udp.uh_sum = checksum_tcpudp(ip.ip_len, ip.ip_p, (uint8_t*)&ip.ip_src, 
       (uint8_t*)&udp);
 
-  (void)eth;
-  (void)ip;
+  return out;
 }
 
-void check_ipmi_packet(const uint8_t *buf)
+struct ipmi_15_full_pkt* 
+check_ipmi_packet(const uint8_t *buf)
 {
   /* read the ip header, if proto is not UDP - not an ipmi packet */
   struct eth_header *eth = PKT_GET_ETH_HDR(buf);
   uint32_t eth_sz = eth_get_l2_hdr_length(buf);
   struct ip_header *ip = PKT_GET_IP_HDR(buf);
   if(ip->ip_p != IP_PROTO_UDP) {
-    return;
+    return NULL;
   }
   uint8_t ihl = 0x0fu & ip->ip_ver_len;
   size_t ip_sz = ihl*4;
@@ -311,7 +342,7 @@ void check_ipmi_packet(const uint8_t *buf)
    */
   uint16_t dstp = lduw_be_p(buf + eth_sz + ip_sz + 2);
   if(dstp != IPMI_UDP_PORT) {
-    return;
+    return NULL;
   }
 
   /* read RMCP header */
@@ -327,9 +358,7 @@ void check_ipmi_packet(const uint8_t *buf)
     struct ipmi_15_pkt ipkt = IPMI_15_PKT();
     bool ok = handle_ipmi_request(buf + ipmi_start, &ipkt);
     if(ok) {
-      send_ipmi_response(eth, ip, &ipkt);
-      ipmi_free_pkt(&ipkt);
-      return;
+      return create_ipmi_response(eth, ip, &rcmp, &ipkt);
     }
   }
 
@@ -339,7 +368,7 @@ void check_ipmi_packet(const uint8_t *buf)
            rcmp.class == ASF_RCMP_CLASS ) 
   {
     qemu_log("ipmi-lan: recv'd asf packet\n");
-    return;
+    return NULL;
   }
 
   /* if we're here - we got a malformed packet */
@@ -351,5 +380,7 @@ void check_ipmi_packet(const uint8_t *buf)
     qemu_log("sequence %x\n", rcmp.sequence);
     qemu_log("class %x\n", rcmp.class);
   }
+
+  return NULL;
 
 }

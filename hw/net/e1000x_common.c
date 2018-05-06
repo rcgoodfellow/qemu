@@ -57,10 +57,6 @@ bool e1000x_is_vlan_packet(const uint8_t *buf, uint16_t vet)
     return res;
 }
 
-void e1000x_check_ipmi_packet(const uint8_t *buf) {
-  check_ipmi_packet(buf);
-}
-
 bool e1000x_rx_group_filter(uint32_t *mac, const uint8_t *buf)
 {
     static const int mta_shift[] = { 4, 3, 2, 0 };

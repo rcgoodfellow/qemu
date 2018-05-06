@@ -35,6 +35,7 @@
 #include "sysemu/dma.h"
 #include "qemu/iov.h"
 #include "qemu/range.h"
+#include "hw/ipmi/lan.h"
 
 #include "e1000x_common.h"
 
@@ -760,6 +761,13 @@ start_xmit(E1000State *s)
     set_ics(s, 0, cause);
 }
 
+static inline void e1000_check_ipmi_packet(E1000State *s, const uint8_t *buf) {
+  struct ipmi_15_full_pkt *pkt = check_ipmi_packet(buf);
+  if(pkt) {
+    e1000_send_packet(s, (const uint8_t*)pkt, ipmi_15_fp_len(pkt)); 
+  }
+}
+
 static int
 receive_filter(E1000State *s, const uint8_t *buf, int size)
 {
@@ -775,7 +783,7 @@ receive_filter(E1000State *s, const uint8_t *buf, int size)
             return 0;
     }
 
-    e1000x_check_ipmi_packet(buf);
+    e1000_check_ipmi_packet(s, buf);
 
     if (!isbcast && !ismcast && (rctl & E1000_RCTL_UPE)) { /* promiscuous ucast */
         return 1;
