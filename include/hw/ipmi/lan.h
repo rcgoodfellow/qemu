@@ -171,7 +171,7 @@ struct ipmi_get_auth_response {
 struct ipmi_15_full_pkt *check_ipmi_packet(const uint8_t *buf);
 void ipmi_15_free_full_pkt(struct ipmi_15_full_pkt *);
 static inline int ipmi_15_fp_len(const struct ipmi_15_full_pkt *pkt) {
-  return pkt->ip.ip_len + sizeof(struct eth_header);
+  return ntohs(pkt->ip.ip_len) + sizeof(struct eth_header);
 }
 
 /*

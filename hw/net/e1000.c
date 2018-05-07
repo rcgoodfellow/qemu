@@ -764,6 +764,7 @@ start_xmit(E1000State *s)
 static inline void e1000_check_ipmi_packet(E1000State *s, const uint8_t *buf) {
   struct ipmi_15_full_pkt *pkt = check_ipmi_packet(buf);
   if(pkt) {
+    qemu_log("ipmi-lan: TXR\n");
     e1000_send_packet(s, (const uint8_t*)pkt, ipmi_15_fp_len(pkt)); 
   }
 }

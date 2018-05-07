@@ -289,27 +289,36 @@ create_ipmi_response(
 
   struct ip_header ip;
   static uint16_t ip_id = 0;
+  uint16_t ip_len;
   ip.ip_ver_len = ip_origin->ip_ver_len;
   ip.ip_tos = ip_origin->ip_tos;
-  ip.ip_len = sizeof(struct ip_header) + 
-              sizeof(struct udp_header) +
-              sizeof(struct rcmp_hdr) +
-              sizeof(struct ipmi_15_pkt) +
-              ipkt->header.payload_len;
-  ip.ip_id = ip_id++;
+  ip_len = 
+    sizeof(struct ip_header) + 
+    sizeof(struct udp_header) +
+    sizeof(struct rcmp_hdr) +
+    sizeof(struct ipmi_15_pkt) +
+    ipkt->header.payload_len;
+  ip.ip_len = htons(ip_len);
+  ip.ip_id = htons(ip_id++);
   ip.ip_off = 0;
   ip.ip_ttl = 255;
   ip.ip_p = ip_origin->ip_p;
   ip.ip_src = ip_origin->ip_dst;
   ip.ip_dst = ip_origin->ip_src;
+  ip.ip_sum = 0;
 
-  uint32_t cso;
-  ip.ip_sum = calc_ip4_pseudo_hdr_csum(&ip, ip.ip_len, &cso);
+  uint8_t *_ip = (uint8_t*)&ip;
+  for(int i=0; i<20; i++) {
+    qemu_log("%x ", _ip[i]);
+  }
+  qemu_log("\n");
+  ip.ip_sum = htons(checksum_finish(checksum_add(20, _ip)));
   
   struct udp_header udp; 
-  udp.uh_sport = IPMI_UDP_PORT;
-  udp.uh_dport = IPMI_UDP_PORT;
-  udp.uh_ulen = ip.ip_len - sizeof(struct ip_header);
+  udp.uh_sport = htons(IPMI_UDP_PORT);
+  udp.uh_dport = htons(IPMI_UDP_PORT);
+  udp.uh_ulen = htons(ip_len - sizeof(struct ip_header));
+  udp.uh_sum = 0;
 
   struct ipmi_15_full_pkt *out = malloc(sizeof(struct ipmi_15_full_pkt));
   out->eth = eth,
@@ -318,8 +327,11 @@ create_ipmi_response(
   out->rcmp = *rcmp,
   out->ipmi = *ipkt,
 
-  udp.uh_sum = checksum_tcpudp(ip.ip_len, ip.ip_p, (uint8_t*)&ip.ip_src, 
-      (uint8_t*)&udp);
+  out->udp.uh_sum = htons(checksum_tcpudp(
+      ip_len - sizeof(struct ip_header), ip.ip_p, 
+      (uint8_t*)&out->ip.ip_src, 
+      (uint8_t*)&out->udp
+  ));
 
   return out;
 }
