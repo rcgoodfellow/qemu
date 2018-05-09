@@ -144,8 +144,6 @@ enum {
   IPMI_CONTROLLER_SPECIFIC_OEM_GROUP_RESPONSE
 };
 
-
-
 /*
  *  chassis enums
  */
@@ -259,6 +257,23 @@ struct ipmi_set_session_priv_lvl {
 } PACKED;
 
 IPMI_CMD_RESPONSE(ipmi_set_session_priv_lvl);
+
+/*
+ *  app:get_device_id
+ */
+#define IPMI_APP_GET_DEVICE_ID 0x01
+
+struct ipmi_get_device_id {
+  uint8_t device_id,
+          device_revision,
+          firmware_revision_major,
+          firmware_revision_minor,
+          additional_device_support,
+          manufacturer_id[3];
+  uint16_t product_id;
+} PACKED;
+
+IPMI_CMD_RESPONSE(ipmi_get_device_id);
 
 
 /*-----------------------------------------------------------------------------

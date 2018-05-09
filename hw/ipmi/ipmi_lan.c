@@ -217,6 +217,38 @@ handle_app_request(const struct ipmi_request_hdr *req, const uint8_t *data,
       return true;
 
     }
+    case IPMI_APP_GET_DEVICE_ID:
+    {
+      qemu_log("ipmi-lan: get device id\n");
+
+      struct ipmi_get_device_id_response r = {
+          .hdr = {
+            .rqaddr = req->rqaddr,
+            .netfn_rql = 0x07 << 2,
+            .rsaddr = req->rsaddr,
+            .seq_rsl = req->seq_rql,
+            .rqaddr = req->rqaddr,
+            .cmd = req->cmd,
+          },
+          .completion_code = 0x00,
+          .data = {
+            .device_id = 0x00,
+            .device_revision = 0x00,
+            .firmware_revision_major = 0x00,
+            .firmware_revision_minor = 0x00,
+            .additional_device_support = 0x00
+          }
+      };
+
+      memset(r.data.manufacturer_id, 0, sizeof(r.data.manufacturer_id));
+
+      pkt->header.payload_len = sizeof(r);
+      pkt->payload = malloc(sizeof(r));
+      memcpy(pkt->payload, &r, sizeof(r));
+
+      return true;
+
+    }
     default:
       qemu_log("got UNKOWN APP REQUEST\n");
       return false;
