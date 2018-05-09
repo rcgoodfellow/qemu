@@ -91,14 +91,15 @@ handle_app_request(const struct ipmi_request_hdr *req, const uint8_t *data,
           .rqaddr = 0x20,
           .netfn_rql = 0x07 << 2,
           .rsaddr = req->rsaddr,
-          .seq_rsl = 0,
+          .seq_rsl = req->seq_rql,
           .rqaddr = req->rqaddr,
           .cmd = req->cmd,
         },
         .completion_code = 0x00,
         .data = {
           .channel_number = cr->channel_number,
-          .auth_support = 0x00, //no auth support atm.
+          .auth_support = 0x01, //the only authentication mode supported is
+                                //'NONE'
           .status = 0b0011000,  //no per message auth
                                 //no user auth
                                 //no anonymus user support
