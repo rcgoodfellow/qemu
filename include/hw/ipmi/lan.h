@@ -230,6 +230,21 @@ struct ipmi_session_activate {
 
 IPMI_CMD_RESPONSE(ipmi_session_activate);
 
+/*
+ *  app:set_session_priv_lvl
+ */
+#define IPMI_APP_SET_SESSION_PRIV_LVL 0x3B
+
+struct ipmi_set_session_priv_lvl_req {
+  uint8_t req_priv_lvl;
+} PACKED;
+
+struct ipmi_set_session_priv_lvl {
+  uint8_t new_priv_lvl;
+} PACKED;
+
+IPMI_CMD_RESPONSE(ipmi_set_session_priv_lvl);
+
 
 /*-----------------------------------------------------------------------------
  *

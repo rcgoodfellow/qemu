@@ -188,6 +188,35 @@ handle_app_request(const struct ipmi_request_hdr *req, const uint8_t *data,
 
       return true;
     }
+    case IPMI_APP_SET_SESSION_PRIV_LVL:
+    {
+      qemu_log("ipmi-lan: set session privilege level\n");
+
+      const struct ipmi_set_session_priv_lvl_req *pr = 
+        (struct ipmi_set_session_priv_lvl_req*)data;
+
+      struct ipmi_set_session_priv_lvl_response r = {
+          .hdr = {
+            .rqaddr = req->rqaddr,
+            .netfn_rql = 0x07 << 2,
+            .rsaddr = req->rsaddr,
+            .seq_rsl = req->seq_rql,
+            .rqaddr = req->rqaddr,
+            .cmd = req->cmd,
+          },
+          .completion_code = 0x00,
+          .data = {
+            .new_priv_lvl = pr->req_priv_lvl
+          }
+      };
+
+      pkt->header.payload_len = sizeof(r);
+      pkt->payload = malloc(sizeof(r));
+      memcpy(pkt->payload, &r, sizeof(r));
+
+      return true;
+
+    }
     default:
       qemu_log("got UNKOWN APP REQUEST\n");
       return false;
