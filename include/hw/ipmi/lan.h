@@ -137,6 +137,27 @@ enum {
   IPMI_TRANSPORT_RESPONSE,
 };
 
+/*
+ *  chassis enums
+ */
+enum {
+  IPMI_CHASSIS_CAPABILITIES,
+  IPMI_CHASSIS_STATUS,
+  IPMI_CHASSIS_CONTROL
+};
+
+/*
+ *  power control enums
+ */
+enum {
+  IPMI_POWER_DOWN,
+  IPMI_POWER_UP,
+  IPMI_POWER_CYCLE,
+  IPMI_HARD_RESET,
+  IPMI_PULSE_DIAG,
+  IPMI_SOFT_ACPI_SHUTDOWN,
+};
+
 /*-----------------------------------------------------------------------------
  *
  * ipmi command structures
@@ -169,26 +190,38 @@ struct ipmi_get_auth_response {
   uint8_t                                 checksum;
 } PACKED;
 
+/*
+ *  app:get_session_challenge
+ */
+#define IPMI_APP_GET_SESSION_CHALLENGE 0x39
+
+struct ipmi_session_challenge_req {
+  uint8_t authtype;
+  uint8_t username[16];
+} PACKED;
+
+struct ipmi_session_challenge {
+  uint32_t session_id;
+  uint8_t challenge[16];
+}PACKED;
+
+struct ipmi_session_challenge_response {
+  struct ipmi_response_hdr hdr;
+  uint8_t completion_code;
+  struct ipmi_session_challenge data;
+  uint8_t checksum;
+} PACKED;
+
+
+/*-----------------------------------------------------------------------------
+ *
+ * helper functions
+ *
+ *---------------------------------------------------------------------------*/
+
 uint8_t *check_ipmi_packet(const uint8_t *buf, size_t *len);
 void ipmi_15_free_full_pkt(struct ipmi_15_full_pkt *);
 static inline int ipmi_15_fp_len(const struct ipmi_15_full_pkt *pkt) {
   return ntohs(pkt->ip.ip_len) + sizeof(struct eth_header);
 }
 
-/*
- *  chassis
- */
-enum {
-  IPMI_CHASSIS_CAPABILITIES,
-  IPMI_CHASSIS_STATUS,
-  IPMI_CHASSIS_CONTROL
-};
-
-enum {
-  IPMI_POWER_DOWN,
-  IPMI_POWER_UP,
-  IPMI_POWER_CYCLE,
-  IPMI_HARD_RESET,
-  IPMI_PULSE_DIAG,
-  IPMI_SOFT_ACPI_SHUTDOWN,
-};

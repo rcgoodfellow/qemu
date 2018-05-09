@@ -78,17 +78,17 @@ static bool
 handle_app_request(const struct ipmi_request_hdr *req, const uint8_t *data,
     struct ipmi_15_pkt *pkt)
 {
-  qemu_log("got APP REQUEST\n");
+  qemu_log("ipmi-lan: app request\n");
   switch(req->cmd) {
     case IPMI_APP_GET_AUTH:
     {
-      qemu_log("got AUTH CAPABILITY REQUEST\n");
+      qemu_log("ipmi-lan: auth capability request\n");
 
-      const struct channel_auth_req *cr = (struct channel_auth_req*)(data);
+      const struct channel_auth_req *cr = (struct channel_auth_req*)data;
 
       struct ipmi_get_auth_response r = {
         .hdr = {
-          .rqaddr = 0x20,
+          .rqaddr = 0x20, //XXX req->rqaddr
           .netfn_rql = 0x07 << 2,
           .rsaddr = req->rsaddr,
           .seq_rsl = req->seq_rql,
@@ -122,6 +122,37 @@ handle_app_request(const struct ipmi_request_hdr *req, const uint8_t *data,
           "pseq=%x "
           "cmd=%x\n",
           r.hdr.rsaddr, r.hdr.netfn_rql, r.hdr.checksum, r.hdr.rqaddr, r.hdr.seq_rsl, r.hdr.cmd);
+      return true;
+    }
+    case IPMI_APP_GET_SESSION_CHALLENGE:
+    {
+      qemu_log("ipmi-lan: session request\n");
+
+      //monotonically incrementing session_id static across calls
+      static uint32_t session_id = 1;
+
+      const struct ipmi_session_challenge_req *sr = (struct ipmi_session_challenge_req*)data;
+
+      struct ipmi_session_challenge_response r = {
+        .hdr = {
+          .rqaddr = req->rqaddr,
+          .netfn_rql = 0x07 << 2,
+          .rsaddr = req->rsaddr,
+          .seq_rsl = req->seq_rql,
+          .rqaddr = req->rqaddr,
+          .cmd = req->cmd,
+        },
+        .completion_code = 0x00,
+        .data = {
+          .session_id = session_id++
+        }
+      };
+
+      memcpy(r.data.challenge, sr->username, sizeof(sr->username));
+      pkt->header.payload_len = sizeof(r);
+      pkt->payload = malloc(sizeof(r));
+      memcpy(pkt->payload, &r, sizeof(r));
+
       return true;
     }
     default:
