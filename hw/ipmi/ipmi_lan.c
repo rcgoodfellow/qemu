@@ -279,6 +279,7 @@ static struct ipmi_15_full_pkt*
 create_ipmi_response(
     const struct eth_header *eth_origin,
     const struct ip_header *ip_origin,
+    const struct udp_header *udp_origin,
     const struct rcmp_hdr *rcmp,
     const struct ipmi_15_pkt *ipkt)
 {
@@ -307,16 +308,11 @@ create_ipmi_response(
   ip.ip_dst = ip_origin->ip_src;
   ip.ip_sum = 0;
 
-  uint8_t *_ip = (uint8_t*)&ip;
-  for(int i=0; i<20; i++) {
-    qemu_log("%x ", _ip[i]);
-  }
-  qemu_log("\n");
-  ip.ip_sum = htons(checksum_finish(checksum_add(20, _ip)));
+  ip.ip_sum = htons(checksum_finish(checksum_add(20, (uint8_t*)&ip)));
   
   struct udp_header udp; 
-  udp.uh_sport = htons(IPMI_UDP_PORT);
-  udp.uh_dport = htons(IPMI_UDP_PORT);
+  udp.uh_sport = udp_origin->uh_dport;
+  udp.uh_dport = udp_origin->uh_sport;
   udp.uh_ulen = htons(ip_len - sizeof(struct ip_header));
   udp.uh_sum = 0;
 
@@ -348,6 +344,7 @@ check_ipmi_packet(const uint8_t *buf)
   }
   uint8_t ihl = 0x0fu & ip->ip_ver_len;
   size_t ip_sz = ihl*4;
+  struct udp_header *udp = (struct udp_header*)( ((uint8_t*)ip) + ip_sz );
 
   /* read the udp destination port, if not 632 - not an ipmi packet
    * TODO: also deal with port 624
@@ -370,7 +367,7 @@ check_ipmi_packet(const uint8_t *buf)
     struct ipmi_15_pkt ipkt = IPMI_15_PKT();
     bool ok = handle_ipmi_request(buf + ipmi_start, &ipkt);
     if(ok) {
-      return create_ipmi_response(eth, ip, &rcmp, &ipkt);
+      return create_ipmi_response(eth, ip, udp, &rcmp, &ipkt);
     }
   }
 
