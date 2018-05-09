@@ -6,6 +6,7 @@
 #define IPMI_UDP_PORT 623
 #define IPMI_RING_SIZE 3
 #define PACKED __attribute__ ((__packed__))
+#define UNUSED(x) (void)x;
 
 /*-----------------------------------------------------------------------------
  *
@@ -178,7 +179,7 @@ struct datatype##_response {              \
   uint8_t checksum;                       \
 } PACKED;
 
-struct unsupported_cmd_response {
+struct ipmi_basic_cmd_response {
   struct ipmi_response_hdr hdr;
   uint8_t completion_code;
   uint8_t checksum;
@@ -274,6 +275,28 @@ struct ipmi_get_device_id {
 } PACKED;
 
 IPMI_CMD_RESPONSE(ipmi_get_device_id);
+
+/*
+ *  app:close_session
+ */
+#define IPMI_APP_CLOSE_SESSION 0x3C
+
+struct ipmi_close_session_req {
+  uint32_t session_id;
+} PACKED;
+
+
+/*
+ *  chassis:get_status
+ */
+
+struct ipmi_get_chassis_status {
+  uint8_t current_power_state,
+          last_power_event,
+          misc_chassis_state;
+} PACKED;
+
+IPMI_CMD_RESPONSE(ipmi_get_chassis_status);
 
 
 /*-----------------------------------------------------------------------------

@@ -90,7 +90,7 @@ handle_app_request(const struct ipmi_request_hdr *req, const uint8_t *data,
       struct ipmi_get_auth_response r = {
         .hdr = {
           .rqaddr = req->rqaddr,
-          .netfn_rql = 0x07 << 2,
+          .netfn_rql = IPMI_APP_RESPONSE << 2,
           .rsaddr = req->rsaddr,
           .seq_rsl = req->seq_rql,
           .rqaddr = req->rqaddr,
@@ -139,7 +139,7 @@ handle_app_request(const struct ipmi_request_hdr *req, const uint8_t *data,
       struct ipmi_session_challenge_response r = {
         .hdr = {
           .rqaddr = req->rqaddr,
-          .netfn_rql = 0x07 << 2,
+          .netfn_rql = IPMI_APP_RESPONSE << 2,
           .rsaddr = req->rsaddr,
           .seq_rsl = req->seq_rql,
           .rqaddr = req->rqaddr,
@@ -168,7 +168,7 @@ handle_app_request(const struct ipmi_request_hdr *req, const uint8_t *data,
       struct ipmi_session_activate_response r = {
           .hdr = {
             .rqaddr = req->rqaddr,
-            .netfn_rql = 0x07 << 2,
+            .netfn_rql = IPMI_APP_RESPONSE << 2,
             .rsaddr = req->rsaddr,
             .seq_rsl = req->seq_rql,
             .rqaddr = req->rqaddr,
@@ -198,7 +198,7 @@ handle_app_request(const struct ipmi_request_hdr *req, const uint8_t *data,
       struct ipmi_set_session_priv_lvl_response r = {
           .hdr = {
             .rqaddr = req->rqaddr,
-            .netfn_rql = 0x07 << 2,
+            .netfn_rql = IPMI_APP_RESPONSE << 2,
             .rsaddr = req->rsaddr,
             .seq_rsl = req->seq_rql,
             .rqaddr = req->rqaddr,
@@ -224,7 +224,7 @@ handle_app_request(const struct ipmi_request_hdr *req, const uint8_t *data,
       struct ipmi_get_device_id_response r = {
           .hdr = {
             .rqaddr = req->rqaddr,
-            .netfn_rql = 0x07 << 2,
+            .netfn_rql = IPMI_APP_RESPONSE << 2,
             .rsaddr = req->rsaddr,
             .seq_rsl = req->seq_rql,
             .rqaddr = req->rqaddr,
@@ -249,6 +249,35 @@ handle_app_request(const struct ipmi_request_hdr *req, const uint8_t *data,
       return true;
 
     }
+    case IPMI_APP_CLOSE_SESSION:
+    {
+      qemu_log("ipmi-lan: close session\n");
+
+      const struct ipmi_close_session_req *cr = 
+        (struct ipmi_close_session_req*)data;
+
+      //TODO not actually tracking sessions atm
+      UNUSED(cr);
+
+      struct ipmi_basic_cmd_response r = {
+          .hdr = {
+            .rqaddr = req->rqaddr,
+            .netfn_rql = IPMI_APP_RESPONSE << 2,
+            .rsaddr = req->rsaddr,
+            .seq_rsl = req->seq_rql,
+            .rqaddr = req->rqaddr,
+            .cmd = req->cmd,
+          },
+          .completion_code = 0x00,
+      };
+
+      pkt->header.payload_len = sizeof(r);
+      pkt->payload = malloc(sizeof(r));
+      memcpy(pkt->payload, &r, sizeof(r));
+
+      return true;
+
+    }
     default:
       qemu_log("got UNKOWN APP REQUEST\n");
       return false;
@@ -258,10 +287,11 @@ handle_app_request(const struct ipmi_request_hdr *req, const uint8_t *data,
 static void handle_unsupported_request(const struct ipmi_request_hdr *req,
     struct ipmi_15_pkt *pkt)
 {
-  struct unsupported_cmd_response r = {
+  uint8_t netfn = (req->netfn_rsl & 0xfc) >> 2;
+  struct ipmi_basic_cmd_response r = {
     .hdr = {
       .rqaddr = req->rqaddr,
-      .netfn_rql = 0x07 << 2,
+      .netfn_rql = (netfn+1) << 2,
       .rsaddr = req->rsaddr,
       .seq_rsl = req->seq_rql,
       .rqaddr = req->rqaddr,
@@ -282,9 +312,37 @@ handle_chassis_request(const struct ipmi_request_hdr *req, const uint8_t *data,
   switch(req->cmd) {
     case IPMI_CHASSIS_STATUS:
       qemu_log("got CHASSIS STATUS request\n");
-      //TODO implement
-      return false;
-      break;
+
+      struct ipmi_get_chassis_status_response r = {
+        .hdr = {
+          .rqaddr = req->rqaddr,
+          .netfn_rql = IPMI_CHASSIS_RESPONSE << 2,
+          .rsaddr = req->rsaddr,
+          .seq_rsl = req->seq_rql,
+          .rqaddr = req->rqaddr,
+          .cmd = req->cmd,
+        },
+        .completion_code = 0x00,
+        .data = {
+          .current_power_state = 0b00100001, // [0]=1:    power on
+                                             // [1]=0:    no overload
+                                             // [2]=0:    no interlock
+                                             // [3]=0:    no power fault
+                                             // [4]=0:    no control fault
+                                             // [5:6]=01: restore on recover
+                                             // [7]=0:    reserved
+
+          .last_power_event = 0x00,          // no interesting events recently
+          .misc_chassis_state = 0x00         // no interesting chassis state
+        }
+      };
+
+      pkt->header.payload_len = sizeof(r);
+      pkt->payload = malloc(sizeof(r));
+      memcpy(pkt->payload, &r, sizeof(r));
+
+      return true;
+
     case IPMI_CHASSIS_CONTROL: {
       qemu_log("got CHASSIS control request\n");
       switch(req->cmd) {
@@ -310,7 +368,9 @@ handle_chassis_request(const struct ipmi_request_hdr *req, const uint8_t *data,
           qemu_log("got unsupported chassis control command %x\n", 
               req->cmd);
       }
-      //TODO create response
+
+      //TODO implement
+
       return false;
     }
     default:
