@@ -135,7 +135,16 @@ enum {
   IPMI_STORAGE_RESPONSE,
   IPMI_TRANSPORT_REQUEST,
   IPMI_TRANSPORT_RESPONSE,
+  //0x0E - 0x2B RESERVED
+  IPMI_GROUP_EXTENSION_REQUEST = 0x2C,
+  IPMI_GROUP_EXTENSION_RESPONSE,
+  IPMI_OEM_GROUP_REQUEST,
+  IPMI_OEM_GROUP_RESPONSE,
+  IPMI_CONTROLLER_SPECIFIC_OEM_GROUP_REQUEST,
+  IPMI_CONTROLLER_SPECIFIC_OEM_GROUP_RESPONSE
 };
+
+
 
 /*
  *  chassis enums
@@ -169,6 +178,12 @@ struct datatype##_response {              \
   uint8_t completion_code;                \
   struct datatype data;                   \
   uint8_t checksum;                       \
+} PACKED;
+
+struct unsupported_cmd_response {
+  struct ipmi_response_hdr hdr;
+  uint8_t completion_code;
+  uint8_t checksum;
 } PACKED;
 
 /*

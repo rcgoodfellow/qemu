@@ -223,6 +223,26 @@ handle_app_request(const struct ipmi_request_hdr *req, const uint8_t *data,
   }
 }
 
+static void handle_unsupported_request(const struct ipmi_request_hdr *req,
+    struct ipmi_15_pkt *pkt)
+{
+  struct unsupported_cmd_response r = {
+    .hdr = {
+      .rqaddr = req->rqaddr,
+      .netfn_rql = 0x07 << 2,
+      .rsaddr = req->rsaddr,
+      .seq_rsl = req->seq_rql,
+      .rqaddr = req->rqaddr,
+      .cmd = req->cmd,
+    },
+    .completion_code = 0xC1
+  };
+
+  pkt->header.payload_len = sizeof(r);
+  pkt->payload = malloc(sizeof(r));
+  memcpy(pkt->payload, &r, sizeof(r));
+}
+
 static bool
 handle_chassis_request(const struct ipmi_request_hdr *req, const uint8_t *data,
     struct ipmi_15_pkt *pkt)
@@ -301,9 +321,11 @@ handle_ipmi_request(const uint8_t *pkt_in, struct ipmi_15_pkt *pkt_out)
 
     case IPMI_CHASSIS_REQUEST:
       return handle_chassis_request(&req, data, pkt_out);
+
     default: 
       qemu_log("got unimplemented function %x\n", netfn);
-      return false;
+      handle_unsupported_request(&req, pkt_out);
+      return true;
   }
 }
 
