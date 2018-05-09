@@ -113,8 +113,15 @@ handle_app_request(const struct ipmi_request_hdr *req, const uint8_t *data,
       pkt->header.payload_len = sizeof(r);
       pkt->payload = malloc(sizeof(r));
       memcpy(pkt->payload, &r, sizeof(r));
+      qemu_log("IPMI payload send: "
+          "rsaddr=%x "
+          "netfn=%x "
+          "checksum=%x "
+          "rqaddr=%x "
+          "pseq=%x "
+          "cmd=%x\n",
+          r.hdr.rsaddr, r.hdr.netfn_rql, r.hdr.checksum, r.hdr.rqaddr, r.hdr.seq_rsl, r.hdr.cmd);
       return true;
-      break;
     }
     default:
       qemu_log("got UNKOWN APP REQUEST\n");
@@ -189,7 +196,7 @@ handle_ipmi_request(const uint8_t *pkt_in, struct ipmi_15_pkt *pkt_out)
       "checksum=%x "
       "rqaddr=%x "
       "pseq=%x "
-      "cmd=%x ",
+      "cmd=%x\n",
       req.rsaddr, netfn, req.checksum, req.rqaddr, req.seq_rql, req.cmd);
 
   const uint8_t *data = pkt_in + payload_start + sizeof(struct ipmi_request_hdr);
@@ -275,13 +282,15 @@ calc_ip4_pseudo_hdr_csum(struct ip_header *iphdr,
 
 /* end XXX */
 
-static struct ipmi_15_full_pkt*
+//static struct ipmi_15_full_pkt*
+static uint8_t*
 create_ipmi_response(
     const struct eth_header *eth_origin,
     const struct ip_header *ip_origin,
     const struct udp_header *udp_origin,
     const struct rcmp_hdr *rcmp,
-    const struct ipmi_15_pkt *ipkt)
+    const struct ipmi_15_pkt *ipkt,
+    size_t *len)
 {
   struct eth_header eth;
   memcpy(&eth.h_dest[0], &eth_origin->h_source[0], sizeof(eth.h_dest));
@@ -316,24 +325,39 @@ create_ipmi_response(
   udp.uh_ulen = htons(ip_len - sizeof(struct ip_header));
   udp.uh_sum = 0;
 
-  struct ipmi_15_full_pkt *out = malloc(sizeof(struct ipmi_15_full_pkt));
-  out->eth = eth,
-  out->ip = ip,
-  out->udp = udp,
-  out->rcmp = *rcmp,
-  out->ipmi = *ipkt,
+  *len = sizeof(eth) + ip_len;
+  uint8_t *blob = malloc(*len);
+  size_t i = 0;
+  memcpy(blob+i, &eth, sizeof(eth));
+  i += sizeof(eth);
+  memcpy(blob+i, &ip, sizeof(ip));
+  i += sizeof(ip);
+  memcpy(blob+i, &udp, sizeof(udp));
+  i += sizeof(udp);
+  memcpy(blob+i, rcmp, sizeof(struct rcmp_hdr));
+  i += sizeof(struct rcmp_hdr);
+  memcpy(blob+i, &ipkt->header, sizeof(ipkt->header));
+  i += sizeof(ipkt->header);
+  memcpy(blob+i, ipkt->payload, ipkt->header.payload_len);
+  i += ipkt->header.payload_len;
+  memcpy(blob+i, &ipkt->footer, sizeof(ipkt->footer));
 
-  out->udp.uh_sum = htons(checksum_tcpudp(
+  struct ip_header *ip_p = (struct ip_header*)blob+sizeof(eth);
+  struct udp_header *udp_p = (struct udp_header*)blob+sizeof(eth)+sizeof(udp);
+  udp_p->uh_sum = htons(checksum_tcpudp(
       ip_len - sizeof(struct ip_header), ip.ip_p, 
-      (uint8_t*)&out->ip.ip_src, 
-      (uint8_t*)&out->udp
+      (uint8_t*)&ip_p->ip_src, 
+      (uint8_t*)udp_p
   ));
+  
+  free(ipkt->payload);
 
-  return out;
+  return blob;
 }
 
-struct ipmi_15_full_pkt* 
-check_ipmi_packet(const uint8_t *buf)
+//struct ipmi_15_full_pkt* 
+uint8_t*
+check_ipmi_packet(const uint8_t *buf, size_t *len)
 {
   /* read the ip header, if proto is not UDP - not an ipmi packet */
   struct eth_header *eth = PKT_GET_ETH_HDR(buf);
@@ -367,7 +391,7 @@ check_ipmi_packet(const uint8_t *buf)
     struct ipmi_15_pkt ipkt = IPMI_15_PKT();
     bool ok = handle_ipmi_request(buf + ipmi_start, &ipkt);
     if(ok) {
-      return create_ipmi_response(eth, ip, udp, &rcmp, &ipkt);
+      return create_ipmi_response(eth, ip, udp, &rcmp, &ipkt, len);
     }
   }
 

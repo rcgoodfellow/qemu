@@ -4,6 +4,7 @@
 #include "net/net.h"
 
 #define IPMI_UDP_PORT 623
+#define IPMI_RING_SIZE 3
 #define PACKED __attribute__ ((__packed__))
 
 /*-----------------------------------------------------------------------------
@@ -168,7 +169,7 @@ struct ipmi_get_auth_response {
   uint8_t                                 checksum;
 } PACKED;
 
-struct ipmi_15_full_pkt *check_ipmi_packet(const uint8_t *buf);
+uint8_t *check_ipmi_packet(const uint8_t *buf, size_t *len);
 void ipmi_15_free_full_pkt(struct ipmi_15_full_pkt *);
 static inline int ipmi_15_fp_len(const struct ipmi_15_full_pkt *pkt) {
   return ntohs(pkt->ip.ip_len) + sizeof(struct eth_header);

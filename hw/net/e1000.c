@@ -762,10 +762,26 @@ start_xmit(E1000State *s)
 }
 
 static inline void e1000_check_ipmi_packet(E1000State *s, const uint8_t *buf) {
-  struct ipmi_15_full_pkt *pkt = check_ipmi_packet(buf);
+
+  /* keep a ring buffer of 10 ipmi packets */
+  static uint8_t* ring[IPMI_RING_SIZE];
+  static unsigned idx = 0;
+  memset(ring, 0, IPMI_RING_SIZE*sizeof(uint8_t*));
+
+  size_t len;
+  uint8_t *pkt = check_ipmi_packet(buf, &len);
   if(pkt) {
-    qemu_log("ipmi-lan: TXR\n");
-    e1000_send_packet(s, (const uint8_t*)pkt, ipmi_15_fp_len(pkt)); 
+    /* turn the ring */
+    printf("ipmi-lan: ring %u\n", idx);
+    free(ring[idx]);
+    ring[idx] = pkt;
+    idx = (idx + 1) % IPMI_RING_SIZE;
+
+    qemu_log("ipmi-lan: TXR %zu\n", len);
+    e1000_send_packet(s, pkt, len); 
+
+    //XXX cannot free packet here b/c the above is async
+    //free(pkt);
   }
 }
 
