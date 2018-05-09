@@ -84,11 +84,12 @@ handle_app_request(const struct ipmi_request_hdr *req, const uint8_t *data,
     {
       qemu_log("ipmi-lan: auth capability request\n");
 
-      const struct channel_auth_req *cr = (struct channel_auth_req*)data;
+      const struct ipmi_channel_auth_req *cr = 
+        (struct ipmi_channel_auth_req*)data;
 
       struct ipmi_get_auth_response r = {
         .hdr = {
-          .rqaddr = 0x20, //XXX req->rqaddr
+          .rqaddr = req->rqaddr,
           .netfn_rql = 0x07 << 2,
           .rsaddr = req->rsaddr,
           .seq_rsl = req->seq_rql,
@@ -121,7 +122,8 @@ handle_app_request(const struct ipmi_request_hdr *req, const uint8_t *data,
           "rqaddr=%x "
           "pseq=%x "
           "cmd=%x\n",
-          r.hdr.rsaddr, r.hdr.netfn_rql, r.hdr.checksum, r.hdr.rqaddr, r.hdr.seq_rsl, r.hdr.cmd);
+          r.hdr.rsaddr, r.hdr.netfn_rql, r.hdr.checksum, r.hdr.rqaddr, 
+          r.hdr.seq_rsl, r.hdr.cmd);
       return true;
     }
     case IPMI_APP_GET_SESSION_CHALLENGE:
@@ -131,7 +133,8 @@ handle_app_request(const struct ipmi_request_hdr *req, const uint8_t *data,
       //monotonically incrementing session_id static across calls
       static uint32_t session_id = 1;
 
-      const struct ipmi_session_challenge_req *sr = (struct ipmi_session_challenge_req*)data;
+      const struct ipmi_session_challenge_req *sr = 
+        (struct ipmi_session_challenge_req*)data;
 
       struct ipmi_session_challenge_response r = {
         .hdr = {
@@ -149,6 +152,36 @@ handle_app_request(const struct ipmi_request_hdr *req, const uint8_t *data,
       };
 
       memcpy(r.data.challenge, sr->username, sizeof(sr->username));
+      pkt->header.payload_len = sizeof(r);
+      pkt->payload = malloc(sizeof(r));
+      memcpy(pkt->payload, &r, sizeof(r));
+
+      return true;
+    }
+    case IPMI_APP_ACTIVATE_SESSION:
+    {
+      qemu_log("ipmi-lan: activate session\n");
+      
+      const struct ipmi_session_activate_req *ar =
+        (struct ipmi_session_activate_req*)data;
+
+      struct ipmi_session_activate_response r = {
+          .hdr = {
+            .rqaddr = req->rqaddr,
+            .netfn_rql = 0x07 << 2,
+            .rsaddr = req->rsaddr,
+            .seq_rsl = req->seq_rql,
+            .rqaddr = req->rqaddr,
+            .cmd = req->cmd,
+          },
+          .completion_code = 0x00,
+          .data = {
+            .session_id = pkt->header.session_id,
+            .seq = 0,
+            .max_priv_lvl = ar->max_priv_lvl
+          }
+      };
+
       pkt->header.payload_len = sizeof(r);
       pkt->payload = malloc(sizeof(r));
       memcpy(pkt->payload, &r, sizeof(r));

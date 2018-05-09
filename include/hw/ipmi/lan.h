@@ -163,18 +163,25 @@ enum {
  * ipmi command structures
  *
  *---------------------------------------------------------------------------*/
+#define IPMI_CMD_RESPONSE(datatype)       \
+struct datatype##_response {              \
+  struct ipmi_response_hdr hdr;           \
+  uint8_t completion_code;                \
+  struct datatype data;                   \
+  uint8_t checksum;                       \
+} PACKED;
 
 /*
  *  app:get_channel_auth
  */
 #define IPMI_APP_GET_AUTH 0x38
 
-struct channel_auth_req {
+struct ipmi_channel_auth_req {
   uint8_t channel_number,
           max_priv_lvl;
 } PACKED;
 
-struct ipmi_channel_auth_capabilities {
+struct ipmi_get_auth {
   uint8_t channel_number,
           auth_support,
           status,
@@ -183,12 +190,7 @@ struct ipmi_channel_auth_capabilities {
           oem_aux;
 } PACKED;
 
-struct ipmi_get_auth_response {
-  struct ipmi_response_hdr                hdr;
-  uint8_t                                 completion_code;
-  struct ipmi_channel_auth_capabilities   data;
-  uint8_t                                 checksum;
-} PACKED;
+IPMI_CMD_RESPONSE(ipmi_get_auth);
 
 /*
  *  app:get_session_challenge
@@ -205,12 +207,28 @@ struct ipmi_session_challenge {
   uint8_t challenge[16];
 }PACKED;
 
-struct ipmi_session_challenge_response {
-  struct ipmi_response_hdr hdr;
-  uint8_t completion_code;
-  struct ipmi_session_challenge data;
-  uint8_t checksum;
+IPMI_CMD_RESPONSE(ipmi_session_challenge);
+
+/*
+ *  app:activate_session
+ */
+#define IPMI_APP_ACTIVATE_SESSION 0x3A
+
+struct ipmi_session_activate_req {
+  uint8_t authtype,
+          max_priv_lvl,
+          challenge[16];
+  uint32_t seq;
 } PACKED;
+
+struct ipmi_session_activate {
+  uint8_t authtype;
+  uint32_t session_id,
+           seq;
+  uint8_t max_priv_lvl;
+} PACKED;
+
+IPMI_CMD_RESPONSE(ipmi_session_activate);
 
 
 /*-----------------------------------------------------------------------------
