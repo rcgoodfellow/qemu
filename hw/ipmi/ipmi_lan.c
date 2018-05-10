@@ -543,8 +543,9 @@ create_ipmi_response(
     sizeof(struct ip_header) + 
     sizeof(struct udp_header) +
     sizeof(struct rcmp_hdr) +
-    sizeof(struct ipmi_15_pkt) +
-    ipkt->header.payload_len;
+    sizeof(struct ipmi_15_hdr) +
+    ipkt->header.payload_len +
+    sizeof(struct ipmi_15_footer);
   ip.ip_len = htons(ip_len);
   ip.ip_id = htons(ip_id++);
   ip.ip_off = 0;
@@ -578,9 +579,10 @@ create_ipmi_response(
   memcpy(blob+i, ipkt->payload, ipkt->header.payload_len);
   i += ipkt->header.payload_len;
   memcpy(blob+i, &ipkt->footer, sizeof(ipkt->footer));
+  i += sizeof(ipkt->footer);
 
-  struct ip_header *ip_p = (struct ip_header*)blob+sizeof(eth);
-  struct udp_header *udp_p = (struct udp_header*)blob+sizeof(eth)+sizeof(udp);
+  struct ip_header *ip_p = (struct ip_header*)(blob+sizeof(eth));
+  struct udp_header *udp_p = (struct udp_header*)(blob+sizeof(eth)+sizeof(ip));
   udp_p->uh_sum = htons(checksum_tcpudp(
       ip_len - sizeof(struct ip_header), ip.ip_p, 
       (uint8_t*)&ip_p->ip_src, 
