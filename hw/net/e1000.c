@@ -769,8 +769,9 @@ static inline void e1000_check_ipmi_packet(E1000State *s, const uint8_t *buf) {
   memset(ring, 0, IPMI_RING_SIZE*sizeof(uint8_t*));
 
   size_t len;
-  uint8_t *pkt = check_ipmi_packet(buf, &len);
-  if(pkt) {
+  request_callback cb = NULL;
+  uint8_t *pkt = check_ipmi_packet(buf, &len, &cb);
+  if(unlikely(pkt)) {
     /* turn the ring */
     printf("ipmi-lan: ring %u\n", idx);
     free(ring[idx]);
@@ -779,6 +780,11 @@ static inline void e1000_check_ipmi_packet(E1000State *s, const uint8_t *buf) {
 
     qemu_log("ipmi-lan: TXR %zu\n", len);
     e1000_send_packet(s, pkt, len); 
+
+    if(cb) {
+      qemu_log("calling callback %lx\n", (unsigned long)cb);
+      cb();
+    }
 
     //XXX cannot free packet here b/c the above is async
     //free(pkt);

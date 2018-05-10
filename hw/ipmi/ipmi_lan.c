@@ -4,6 +4,10 @@
 #include "net/net.h"
 #include "net/eth.h"
 
+#include "sysemu/sysemu.h"
+#include "qom/cpu.h"
+#include "hw/boards.h"
+
 static inline struct rcmp_hdr 
 read_rcmp_hdr(const uint8_t *buf)
 {
@@ -305,9 +309,17 @@ static void handle_unsupported_request(const struct ipmi_request_hdr *req,
   memcpy(pkt->payload, &r, sizeof(r));
 }
 
+void do_cycle(void)
+{
+ qemu_log("ipmi-lan: POWER CYCLE\n");
+ //give some time for the response propogate out the nic
+ sleep(5);
+ qemu_system_reset_request(SHUTDOWN_CAUSE_GUEST_RESET);
+}
+
 static bool
 handle_chassis_request(const struct ipmi_request_hdr *req, const uint8_t *data,
-    struct ipmi_15_pkt *pkt)
+    struct ipmi_15_pkt *pkt, request_callback *cb)
 {
   switch(req->cmd) {
     case IPMI_CHASSIS_STATUS:
@@ -354,6 +366,7 @@ handle_chassis_request(const struct ipmi_request_hdr *req, const uint8_t *data,
           break;
         case IPMI_POWER_CYCLE:
           qemu_log("got IPMI_POWER_CYCLE\n");
+          *cb = do_cycle;
           break;
         case IPMI_HARD_RESET:
           qemu_log("got IPMI_POWER_RESET\n");
@@ -369,9 +382,23 @@ handle_chassis_request(const struct ipmi_request_hdr *req, const uint8_t *data,
               req->cmd);
       }
 
-      //TODO implement
+      struct ipmi_basic_cmd_response r = {
+        .hdr = {
+          .rqaddr = req->rqaddr,
+          .netfn_rql = IPMI_CHASSIS_RESPONSE << 2,
+          .rsaddr = req->rsaddr,
+          .seq_rsl = req->seq_rql,
+          .rqaddr = req->rqaddr,
+          .cmd = req->cmd,
+        },
+        .completion_code = 0x00
+      };
 
-      return false;
+      pkt->header.payload_len = sizeof(r);
+      pkt->payload = malloc(sizeof(r));
+      memcpy(pkt->payload, &r, sizeof(r));
+
+      return true;
     }
     default:
       qemu_log("got unsupported chassis request %x\n", req->cmd);
@@ -379,8 +406,10 @@ handle_chassis_request(const struct ipmi_request_hdr *req, const uint8_t *data,
   }
 }
 
+
 static bool 
-handle_ipmi_request(const uint8_t *pkt_in, struct ipmi_15_pkt *pkt_out)
+handle_ipmi_request(const uint8_t *pkt_in, struct ipmi_15_pkt *pkt_out,
+    request_callback *cb)
 {
   qemu_log("ipmi-lan: recv'd ipmi packet\n");
 
@@ -412,7 +441,7 @@ handle_ipmi_request(const uint8_t *pkt_in, struct ipmi_15_pkt *pkt_out)
       return handle_app_request(&req, data, pkt_out);
 
     case IPMI_CHASSIS_REQUEST:
-      return handle_chassis_request(&req, data, pkt_out);
+      return handle_chassis_request(&req, data, pkt_out, cb);
 
     default: 
       qemu_log("got unimplemented function %x\n", netfn);
@@ -565,7 +594,7 @@ create_ipmi_response(
 
 //struct ipmi_15_full_pkt* 
 uint8_t*
-check_ipmi_packet(const uint8_t *buf, size_t *len)
+check_ipmi_packet(const uint8_t *buf, size_t *len, request_callback *cb)
 {
   /* read the ip header, if proto is not UDP - not an ipmi packet */
   struct eth_header *eth = PKT_GET_ETH_HDR(buf);
@@ -597,7 +626,7 @@ check_ipmi_packet(const uint8_t *buf, size_t *len)
   {
     size_t ipmi_start = rcmp_start + sizeof(struct rcmp_hdr);
     struct ipmi_15_pkt ipkt = IPMI_15_PKT();
-    bool ok = handle_ipmi_request(buf + ipmi_start, &ipkt);
+    bool ok = handle_ipmi_request(buf + ipmi_start, &ipkt, cb);
     if(ok) {
       return create_ipmi_response(eth, ip, udp, &rcmp, &ipkt, len);
     }

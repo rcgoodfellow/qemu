@@ -305,9 +305,14 @@ IPMI_CMD_RESPONSE(ipmi_get_chassis_status);
  *
  *---------------------------------------------------------------------------*/
 
-uint8_t *check_ipmi_packet(const uint8_t *buf, size_t *len);
+typedef void (*request_callback)(void);
+
+uint8_t *check_ipmi_packet(const uint8_t *buf, size_t *len, 
+    request_callback *cb);
 void ipmi_15_free_full_pkt(struct ipmi_15_full_pkt *);
 static inline int ipmi_15_fp_len(const struct ipmi_15_full_pkt *pkt) {
   return ntohs(pkt->ip.ip_len) + sizeof(struct eth_header);
 }
+
+void do_cycle(void);
 

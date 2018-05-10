@@ -4,7 +4,13 @@ common-obj-$(CONFIG_IPMI_EXTERN) += ipmi_bmc_extern.o
 common-obj-$(CONFIG_ISA_IPMI_KCS) += isa_ipmi_kcs.o
 common-obj-$(CONFIG_ISA_IPMI_BT) += isa_ipmi_bt.o
 
-# we use ipmi lan from e1000 and e1000 is used by everything so using
-# an unguarded object atm
-common-obj-y += ipmi_lan.o
+common-obj-$(CONFIG_IPMI_LAN) += ipmi_lan.o
+
+# we use ipmi lan from e1000 and e1000 is used by everything ... 
+# so we have this gross little noop file to link against ... 
+# barf ...
+# .... so sorry
+ifneq ($(CONFIG_IPMI_LAN),y)
+	common-obj-y += ipmi_lan_noop.o
+endif
 
